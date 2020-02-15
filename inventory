@@ -1,0 +1,8 @@
+[controller]
+qnode1 ansible_host=172.16.78.111
+
+[drivers]
+qnode1 ansible_host=172.16.78.111
+qnode2 ansible_host=172.16.78.112
+qnode3 ansible_host=172.16.78.113
+qnode4 ansible_host=172.16.78.114

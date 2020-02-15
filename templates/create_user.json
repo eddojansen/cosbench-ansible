@@ -1,0 +1,9 @@
+{
+	"params": {
+		"role": "OBSOLETE_UNPRIVILEGED_USER",
+		"password": "password",
+		"user_name": "cosbench_user",
+        "tenant_id": "__TENANT__"
+	},
+	"method": "createUser"
+}

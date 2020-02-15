@@ -1,0 +1,10 @@
+{
+	"params": {
+		"access_key_type": "S3",
+		"user_name": "cosbench_user",
+		"tenant_id": "__TENANT__",
+		"validity_days": 365
+
+	},
+	"method": "createAccessKeyCredentials"
+}

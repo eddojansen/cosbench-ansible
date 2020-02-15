@@ -1,0 +1,9 @@
+{
+	"params": {
+        "tenant": {
+		  "name": "cosbench",
+          "restrict_to_network": ["0.0.0.0/0"] 
+       }
+	},
+	"method": "setTenant"
+}

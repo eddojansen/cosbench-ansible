@@ -1,0 +1,6 @@
+{
+        "params": {
+                "user_id": ["cosbench_user"]
+        },
+        "method": "getUsers"
+}

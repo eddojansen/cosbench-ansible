@@ -1,0 +1,2 @@
+mgmt_api: 172.16.78.111:7860
+s3_endpoint: s3.skynet.local

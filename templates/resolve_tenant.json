@@ -1,0 +1,7 @@
+{
+	"params": {
+		"tenant_name": "cosbench",
+
+	},
+	"method": "resolveTenantName"
+}

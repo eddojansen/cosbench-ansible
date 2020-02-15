@@ -1,0 +1,290 @@
+---
+- hosts: drivers
+  vars_files:
+    - vars/cosbench_vars.yaml
+  vars:
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Install packages Centos
+      yum:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - java-1.8.0-openjdk
+        - chrony
+        - atop
+        - htop
+        - iperf
+        - haproxy
+        - python-netaddr
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Install packages Ubuntu
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+        - openjdk-8-jre-headless
+        - chrony
+        - atop
+        - htop
+        - iperf
+        - haproxy
+        - python-netaddr
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+    - name: Disable SE Linux
+      shell:
+        cmd: /usr/sbin/setenforce 0
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Ensure SELinux is set to disabled mode
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: SELINUX=disabled
+      ignore_errors: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Ensure Apparmor is stopped
+      service:
+        name: apparmor
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+    - name: Remove apparmor
+      package:
+        name: apparmor
+        state: absent
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      ignore_errors: yes
+    - name: Remove swaps from fstab
+      lineinfile:
+        dest: /etc/fstab
+        regexp: '^/[\S]+\s+swap\s+swap'
+        state: absent
+      notify: disable swap
+    - name: Disable swap
+      shell:
+        cmd: swapoff -a
+    - name: Copy haproxy.cfg
+      copy:
+         src: templates/haproxy.cfg
+         dest: /etc/haproxy/
+    - name: Configuring haproxy.cfg
+      local_action:
+        module: lineinfile
+        dest: "/etc/haproxy/haproxy.cfg"
+        line: "    server {{ item }} {{ item }}:80 check inter 5s rise 1 fall 2"
+        create: yes
+      with_lines: cat vars/s3_nodes
+    - name: Start haproxy
+      service:
+        name: haproxy
+        state: restarted
+        enabled: yes
+- hosts: controller
+  vars_files:
+    - vars/cosbench_vars.yaml
+  vars:
+     driver_count: "{{ groups['drivers'] | length }}"
+  become: yes
+  tasks:
+    - name: Create Tenant
+      uri:
+        url: http://{{ mgmt_api }}
+        user: admin
+        password: quobyte
+        method: POST
+        body: "{{ lookup('file','templates/create_tenant.json') }}"
+        force_basic_auth: yes
+        status_code: 200
+        body_format: json
+    - name: Resolve Tenant ID
+      uri:
+        url: http://{{ mgmt_api }}
+        user: admin
+        password: quobyte
+        method: POST
+        body: "{{ lookup('file','templates/resolve_tenant.json') }}"
+        force_basic_auth: yes
+        status_code: 200
+        body_format: json
+      register: tenant_id_raw
+    - set_fact:
+        tenant_id_result: "{{ tenant_id_raw['json']['result']['tenant_id'] }}"
+    - debug:
+        var: tenant_id_result
+    - name: Copy create user
+      copy:
+         src: templates/create_user.json
+         dest: /tmp
+    - replace:
+        path: /tmp/create_user.json
+        regexp: '__TENANT__'
+        replace: '{{ tenant_id_result }}'
+    - name: Copy create s3
+      copy:
+         src: templates/create_s3_key.json
+         dest: /tmp
+    - replace:
+        path: /tmp/create_s3_key.json
+        regexp: '__TENANT__'
+        replace: '{{ tenant_id_result }}'
+    - name: Create User
+      uri:
+        url: http://{{ mgmt_api }}
+        user: admin
+        password: quobyte
+        method: POST
+        body: "{{ lookup('file','/tmp/create_user.json') }}"
+        force_basic_auth: yes
+        status_code: 200
+        body_format: json
+    - name: Create s3 keys
+      uri:
+        url: http://{{ mgmt_api }}
+        user: admin
+        password: quobyte
+        method: POST
+        body: "{{ lookup('file','/tmp/create_s3_key.json') }}"
+        force_basic_auth: yes
+        status_code: 200
+        body_format: json
+    - name: Get S3 Access Key
+      uri:
+        url: http://{{ mgmt_api }}
+        user: admin
+        password: quobyte
+        method: POST
+        body: "{{ lookup('file','templates/get_s3_key.json') }}"
+        force_basic_auth: yes
+        status_code: 200
+        body_format: json
+      register: s3_key_raw
+    - set_fact:
+        s3_a_key: "{{ s3_key_raw['json']['result']['user_configuration'][0]['access_key_credentials'][0]['access_key_id'] }}"
+    - debug:
+        var: s3_a_key
+    - set_fact:
+        s3_s_key: "{{ s3_key_raw['json']['result']['user_configuration'][0]['access_key_credentials'][0]['secret_access_key'] }}"
+    - debug:
+        var: s3_s_key
+    - name: copy Cosbench parts (100MB limit Github)
+      copy: src=templates/{{ item }} dest=${HOME}/
+      with_items:
+        - cosbench.tar.gz.partaa
+        - cosbench.tar.gz.partab
+    - name: Merge archives
+      shell:
+        cmd: cat ${HOME}/cosbench.tar.gz.partaa ${HOME}/cosbench.tar.gz.partab > ${HOME}/cosbench.tar.gz
+    - name: Extract Cosbench
+      unarchive:
+        src: ${HOME}/cosbench.tar.gz
+        dest: ${HOME}/
+        remote_src: yes
+    - name: Create Workload List
+      shell:
+        cmd: ls -d ${HOME}/cosbench/workloads/*.xml
+      register: _workloads
+    - debug: msg="{{ _workloads.stdout_lines}}"
+    - name: Add S3 Access Key to Workloads
+      replace:
+        path: "{{ item }}"
+        regexp: '__AK__'
+        replace: "{{ s3_a_key }}"
+      with_items: "{{ _workloads.stdout_lines }}"
+    - name: Add S3 Access Key to Workloads
+      replace:
+        path: "{{ item }}"
+        regexp: '__SK__'
+        replace: "{{ s3_s_key }}"
+      with_items: "{{ _workloads.stdout_lines }}"
+    - name: Add S3 Endpoint to Workloads
+      replace:
+        path: "{{ item }}"
+        regexp: '__IP__'
+        replace: "{{ s3_endpoint }}"
+      with_items: "{{ _workloads.stdout_lines }}"
+    - replace:
+        path: ${HOME}/cosbench/conf/controller.conf
+        regexp: '__NR__'
+        replace: "{{ driver_count }}"
+    - debug: msg="{{ driver_count }}"
+    - name: Compress Cosbench
+      archive:
+        path: ${HOME}/cosbench
+        dest: ${HOME}/cosbench.tar.gz
+        remove: yes
+- hosts: drivers
+  vars_files:
+    - vars/cosbench_vars.yaml
+  become: yes
+  tasks:
+#    - name: Copy Cosbench
+#      copy:
+#         src: ${HOME}/cosbench.tar.gz
+#         dest: ${HOME}
+    - name: Extract Cosbench
+      unarchive:
+        src: ${HOME}/cosbench.tar.gz
+        dest: ${HOME}
+        remote_src: yes
+    - name: Adding drivers to Cosbench controller
+      blockinfile:
+        dest: ${HOME}/cosbench/conf/controller.conf
+        block: |
+          [driver{{ ansible_play_batch.index(item)+1 }}]
+          name = driver{{ ansible_play_batch.index(item)+1 }}
+          url = http://{{ item }}:18088/driver
+        marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item }}"
+      with_items:
+        - "{{ ansible_play_batch }}"
+    - name: Adding ip to Cosbench drivers
+      blockinfile:
+        dest: ${HOME}/cosbench/conf/driver.conf
+        block: |
+          [driver]
+          name = driver
+          url = http://{{ item }}:18088/driver
+        marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item }}"
+      with_items:
+        - "{{ ansible_default_ipv4.address }}"
+      ignore_errors: yes
+    - name: Make s3 endpoint resolve to localhost
+      local_action:
+        module: lineinfile
+        dest: "/etc/hosts"
+        line: "127.0.0.1   {{ s3_endpoint }}"
+        create: yes
+    - name: Make s3 bucket resolve to localhost
+      local_action:
+        module: lineinfile
+        dest: "/etc/hosts"
+        line: "127.0.0.1   bucket-cosbench1.{{ s3_endpoint }}"
+        create: yes
+    - name: Start Cosbench controller
+      shell:
+        cmd: cd ${HOME}/cosbench/ && nohup ./start-cosbench.sh 2>&1
+    - name: Wait for Cosbench
+      wait_for:
+        port: 19088
+        delay: 4
+- hosts: controller
+  vars_files:
+    - vars/cosbench_vars.yaml
+  become: yes
+  tasks:
+    - name: Submit jobs
+      shell:
+        cmd: curl "http://localhost:19088/controller/cli/submit.action?username=anonymous&password=cosbench" -F "config=@{{ item }}"
+        warn: false
+      with_items: "{{ _workloads.stdout_lines }}"
+    - name: Display end message
+      debug:
+        msg: |
+          Please connect to the Cosbench Controller on http://{{ ansible_default_ipv4.address }}:19088/controller
