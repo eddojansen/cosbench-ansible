@@ -225,6 +225,10 @@
     - vars/cosbench_vars.yaml
   become: yes
   tasks:
+    - name: Copy Cosbench
+      copy:
+         src: ${HOME}/cosbench.tar.gz
+         dest: ${HOME}
     - name: Extract Cosbench
       unarchive:
         src: ${HOME}/cosbench.tar.gz
