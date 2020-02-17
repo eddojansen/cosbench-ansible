@@ -225,10 +225,6 @@
     - vars/cosbench_vars.yaml
   become: yes
   tasks:
-#    - name: Copy Cosbench
-#      copy:
-#         src: ${HOME}/cosbench.tar.gz
-#         dest: ${HOME}
     - name: Extract Cosbench
       unarchive:
         src: ${HOME}/cosbench.tar.gz
@@ -240,7 +236,7 @@
         block: |
           [driver{{ ansible_play_batch.index(item)+1 }}]
           name = driver{{ ansible_play_batch.index(item)+1 }}
-          url = http://{{ item }}:18088/driver
+          url = http://{{ ansible_host }}:18088/driver
         marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item }}"
       with_items:
         - "{{ ansible_play_batch }}"
