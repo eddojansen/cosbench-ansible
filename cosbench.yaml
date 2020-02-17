@@ -175,21 +175,20 @@
     - debug:
         var: s3_s_key
     - name: copy Cosbench parts (100MB limit Github)
-      copy: src=templates/{{ item }} dest=${HOME}/
+      copy: src=templates/{{ item }} dest=/tmp/
       with_items:
         - cosbench.tar.gz.partaa
         - cosbench.tar.gz.partab
     - name: Merge archives
       shell:
-        cmd: cat ${HOME}/cosbench.tar.gz.partaa ${HOME}/cosbench.tar.gz.partab > ${HOME}/cosbench.tar.gz
+        cmd: cat /tmp/cosbench.tar.gz.partaa /tmp/cosbench.tar.gz.partab > /tmp/cosbench.tar.gz
     - name: Extract Cosbench
       unarchive:
-        src: ${HOME}/cosbench.tar.gz
-        dest: ${HOME}/
-        remote_src: yes
+        src: /tmp/cosbench.tar.gz
+        dest: /tmp/
     - name: Create Workload List
       shell:
-        cmd: ls -d ${HOME}/cosbench/workloads/*.xml
+        cmd: ls -d /tmp/cosbench/workloads/*.xml
       register: _workloads
     - debug: msg="{{ _workloads.stdout_lines}}"
     - name: Add S3 Access Key to Workloads
@@ -211,14 +210,14 @@
         replace: "{{ s3_endpoint }}"
       with_items: "{{ _workloads.stdout_lines }}"
     - replace:
-        path: ${HOME}/cosbench/conf/controller.conf
+        path: /tmp/cosbench/conf/controller.conf
         regexp: '__NR__'
         replace: "{{ driver_count }}"
     - debug: msg="{{ driver_count }}"
     - name: Compress Cosbench
       archive:
-        path: ${HOME}/cosbench
-        dest: ${HOME}/cosbench.tar.gz
+        path: /tmp/cosbench
+        dest: /tmp/cosbench.tar.gz
         remove: yes
 - hosts: drivers
   vars_files:
@@ -226,8 +225,8 @@
   become: yes
   tasks:
     - name: Copy Cosbench
-      copy:
-         src: ${HOME}/cosbench.tar.gz
+      copy: 
+         src: /tmp/cosbench.tar.gz
          dest: ${HOME}
     - name: Extract Cosbench
       unarchive:
@@ -279,11 +278,16 @@
     - vars/cosbench_vars.yaml
   become: yes
   tasks:
+    - name: Create Workload Submit List
+      shell:
+        cmd: ls -d $HOME/cosbench/workloads/*.xml
+      register: _submit
+    - debug: msg="{{ _submit.stdout_lines}}"
     - name: Submit jobs
       shell:
         cmd: curl "http://localhost:19088/controller/cli/submit.action?username=anonymous&password=cosbench" -F "config=@{{ item }}"
         warn: false
-      with_items: "{{ _workloads.stdout_lines }}"
+      with_items: "{{ _submit.stdout_lines }}"
     - name: Display end message
       debug:
         msg: |
