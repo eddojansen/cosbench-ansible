@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workload name="Quobyte 600 workers"
+    description="4kb,16kb,512kb,1mb,4mb,10mb read-write tests">
+    <storage type="s3" config="accesskey=__AK__; secretkey=__SK__; endpoint=http://__IP__:1234"/>
+
+      <workflow>
+
+            <workstage name="Read_10MB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="read" config="cprefix=bucket-cosbench; containers=s(1,1); osuffix=run1-10m; objects=s(1,80000)"/>
+                </work>
+            </workstage>
+
+            <workstage name="Read_4MB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="read" config="cprefix=bucket-cosbench; containers=s(1,1); osuffix=run1-4m; objects=s(1,200000)"/>
+                </work>
+            </workstage>
+
+            <workstage name="Read_1MB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="read" config="cprefix=bucket-cosbench; containers=s(1,1); osuffix=run1-1m; objects=s(1,800000)"/>
+                </work>
+            </workstage>
+
+            <workstage name="Read-512KB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="read" config="cprefix=bucket-cosbench; containers=s(1,1); osuffix=run1-512k; objects=s(1,1000000)"/>
+                </work>
+            </workstage>
+
+            <workstage name="Read-16KB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="read" config="cprefix=bucket-cosbench; containers=s(1,1); osuffix=run1-16k; objects=s(1,1000000)"/>
+                </work>
+            </workstage>
+
+            <workstage name="Read-4KB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="read" config="cprefix=bucket-cosbench; containers=s(1,1); osuffix=run1-4k; objects=s(1,1000000)"/>
+                </work>
+            </workstage>
+
+            <workstage name="Write_10MB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="write" config="cprefix=bucket-cosbench; containers=r(1,1); osuffix=run1-600-10m; objects=s(800001,2000000);sizes=c(10)MB"/>
+                </work>
+            </workstage>
+
+            <workstage name="Write_4MB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="write" config="cprefix=bucket-cosbench; containers=r(1,1); osuffix=run1-600-4m; objects=s(200001,500000);sizes=c(4)MB"/>
+                </work>
+            </workstage>
+
+            <workstage name="write_1MB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="write" config="cprefix=bucket-cosbench; containers=r(1,1); osuffix=run1-600-1m; objects=s(1000001,2000000);sizes=c(1)MB"/>
+                </work>
+            </workstage>
+
+            <workstage name="Write-512KB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="write" config="cprefix=bucket-cosbench; containers=r(1,1); osuffix=run1-600-512k; objects=s(1000001,2000000);sizes=c(512)KB"/>
+                </work>
+            </workstage>
+
+            <workstage name="Write-16KB" closuredelay="10">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="write" config="cprefix=bucket-cosbench; containers=r(1,1); osuffix=run1-600-16k; objects=s(1000001,2000000);sizes=c(16)KB"/>
+                </work>
+            </workstage>
+
+            <workstage name="write-4KB" closuredelay="30">
+                <work name="main" type="normal" interval="5" division="object" rampup="30" rampdown="30" runtime="120" workers="600"  totalOps="0">
+                     <operation type="write" config="cprefix=bucket-cosbench; containers=r(1,1); osuffix=run1-600-4k; objects=s(1000001,2000000);sizes=c(4)KB"/>
+                </work>
+            </workstage>
+
+       </workflow>
+ </workload>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workload name="Quobyte prepare"
+    description="prepare">
+    <storage type="s3" config="accesskey=__AK__; secretkey=__SK__; endpoint=http://__IP__:1234"/>
+
+      <workflow>
+           <workstage name="create-buckets">
+                <work type="init" workers="1" config="cprefix=bucket-cosbench; containers=r(1,1)"/>
+            </workstage>
+
+            <workstage name="prepare_10m" closuredelay="10">
+                <work type="prepare" workers="100" config="cprefix=bucket-cosbench;containers=r(1,1);osuffix=run1-10m; objects=r(1,80000);sizes=c(10)MB"/>
+            </workstage>
+
+            <workstage name="prepare_4m" closuredelay="10">
+                <work type="prepare" workers="100" config="cprefix=bucket-cosbench;containers=r(1,1);osuffix=run1-4m; objects=r(1,200000);sizes=c(4)MB"/>
+            </workstage>
+
+            <workstage name="prepare_1m" closuredelay="10">
+                <work type="prepare" workers="100" config="cprefix=bucket-cosbench;containers=r(1,1);osuffix=run1-1m; objects=r(1,800000);sizes=c(1)MB"/>
+            </workstage>
+
+            <workstage name="prepare_512KB" closuredelay="10">
+                <work type="prepare" workers="100" config="cprefix=bucket-cosbench;containers=r(1,1);osuffix=run1-512k; objects=r(1,1000000);sizes=c(512)KB"/>
+            </workstage>
+
+            <workstage name="prepare_16KB" closuredelay="10">
+                <work type="prepare" workers="100" config="cprefix=bucket-cosbench;containers=r(1,1);osuffix=run1-16k; objects=r(1,1000000);sizes=c(16)KB"/>
+            </workstage>
+
+            <workstage name="prepare_4KB" closuredelay="10">
+                <work type="prepare" workers="100" config="cprefix=bucket-cosbench;containers=r(1,1);osuffix=run1-4k; objects=r(1,1000000);sizes=c(4)KB"/>
+            </workstage>
+
+       </workflow>
+ </workload>
