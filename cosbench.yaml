@@ -71,22 +71,6 @@
     - name: Disable swap
       shell:
         cmd: swapoff -a
-    - name: Copy haproxy.cfg
-      copy:
-         src: templates/haproxy.cfg
-         dest: /etc/haproxy/
-    - name: Configuring haproxy.cfg
-      local_action:
-        module: lineinfile
-        dest: "/etc/haproxy/haproxy.cfg"
-        line: "    server {{ item }} {{ item }}:80 check inter 5s rise 1 fall 2"
-        create: yes
-      with_lines: cat vars/s3_nodes
-    - name: Start haproxy
-      service:
-        name: haproxy
-        state: restarted
-        enabled: yes
 - hosts: controller
   vars_files:
     - vars/cosbench_vars.yaml
@@ -94,6 +78,17 @@
      driver_count: "{{ groups['drivers'] | length }}"
   become: yes
   tasks:
+    - name: Copy haproxy.cfg
+      copy:
+         src: templates/haproxy.cfg
+         dest: /tmp/
+    - name: Configuring haproxy.cfg
+      local_action:
+        module: lineinfile
+        dest: "/tmp/haproxy.cfg"
+        line: "    server {{ item }} {{ item }}:80 check inter 5s rise 1 fall 2"
+        create: yes
+      with_lines: cat vars/s3_nodes
     - name: Create Tenant
       uri:
         url: http://{{ mgmt_api }}
@@ -182,15 +177,19 @@
     - name: Merge archives
       shell:
         cmd: cat /tmp/cosbench.tar.gz.partaa /tmp/cosbench.tar.gz.partab > /tmp/cosbench.tar.gz
-    - name: Extract Cosbench
-      unarchive:
-        src: /tmp/cosbench.tar.gz
-        dest: /tmp/
+    - name: Copy workloads
+      copy:
+         src: templates/workloads
+         dest: /tmp/
     - name: Create Workload List
       shell:
-        cmd: ls -d /tmp/cosbench/workloads/*.xml
+        cmd: ls -d /tmp/workloads/*.xml
       register: _workloads
-    - debug: msg="{{ _workloads.stdout_lines}}"
+    - debug: msg="{{ _workloads.stdout_lines }}"
+    - name: Copy Controller and Driver configs
+      copy: src=templates/{{ item }} dest=/tmp/
+      with_items:
+        - controller.conf
     - name: Add S3 Access Key to Workloads
       replace:
         path: "{{ item }}"
@@ -210,20 +209,24 @@
         replace: "{{ s3_endpoint }}"
       with_items: "{{ _workloads.stdout_lines }}"
     - replace:
-        path: /tmp/cosbench/conf/controller.conf
+        path: /tmp/controller.conf
         regexp: '__NR__'
         replace: "{{ driver_count }}"
     - debug: msg="{{ driver_count }}"
-    - name: Compress Cosbench
-      archive:
-        path: /tmp/cosbench
-        dest: /tmp/cosbench.tar.gz
-        remove: yes
 - hosts: drivers
   vars_files:
     - vars/cosbench_vars.yaml
   become: yes
   tasks:
+    - name: Copy haproxy.cfg
+      copy:
+         src: /tmp/haproxy.cfg
+         dest: /etc/haproxy/
+    - name: Start haproxy
+      service:
+        name: haproxy
+        state: restarted
+        enabled: yes
     - name: Copy Cosbench
       copy: 
          src: /tmp/cosbench.tar.gz
@@ -233,16 +236,25 @@
         src: ${HOME}/cosbench.tar.gz
         dest: ${HOME}
         remote_src: yes
+    - name: Copy Workloads
+      copy:
+         src=/tmp/workloads
+         dest=${HOME}/cosbench/
+    - name: Copy Controller and Driver configs
+      copy: 
+         src=/tmp/controller.conf 
+         dest=${HOME}/cosbench/conf/
+    - set_fact:
+        ip_list: "{{ groups['drivers'] | map('extract', hostvars, ['ansible_default_ipv4', 'address'])  | list  }}"
     - name: Adding drivers to Cosbench controller
       blockinfile:
         dest: ${HOME}/cosbench/conf/controller.conf
         block: |
-          [driver{{ ansible_play_batch.index(item)+1 }}]
-          name = driver{{ ansible_play_batch.index(item)+1 }}
-          url = http://{{ ansible_host }}:18088/driver
+          [driver{{ ip_list.index(item)+1 }}]
+          name = driver{{ ip_list.index(item)+1 }}
+          url = http://{{ item }}:18088/driver
         marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item }}"
-      with_items:
-        - "{{ ansible_play_batch }}"
+      with_items: "{{ ip_list }}"
     - name: Adding ip to Cosbench drivers
       blockinfile:
         dest: ${HOME}/cosbench/conf/driver.conf
@@ -254,18 +266,14 @@
       with_items:
         - "{{ ansible_default_ipv4.address }}"
       ignore_errors: yes
-    - name: Make s3 endpoint resolve to localhost
-      local_action:
-        module: lineinfile
-        dest: "/etc/hosts"
-        line: "127.0.0.1   {{ s3_endpoint }}"
-        create: yes
-    - name: Make s3 bucket resolve to localhost
-      local_action:
-        module: lineinfile
-        dest: "/etc/hosts"
-        line: "127.0.0.1   bucket-cosbench1.{{ s3_endpoint }}"
-        create: yes
+    - lineinfile:
+        path: /etc/hosts
+        line: '127.0.0.1 {{ s3_endpoint }}'
+        insertafter: '127.0.0.1'
+    - lineinfile:
+        path: /etc/hosts
+        line: '127.0.0.1 bucket-cosbench1.{{ s3_endpoint }}'
+        insertafter: '127.0.0.1'
     - name: Start Cosbench controller
       shell:
         cmd: cd ${HOME}/cosbench/ && nohup ./start-cosbench.sh 2>&1
