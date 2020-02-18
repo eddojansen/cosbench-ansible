@@ -1,0 +1,22 @@
+---
+- hosts: drivers
+  vars_files:
+    - vars/cosbench_vars.yaml
+  vars:
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Ensure haproxy is stopped
+      service:
+        name: haproxy
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+    - name: clear hosts
+      lineinfile:
+        dest: /etc/hosts
+        regexp: "{{ s3_endpoint }}$"
+        state: absent
+    - name: Kill Cosbench
+      shell:
+        cmd: pkill -9 -f cosbench
